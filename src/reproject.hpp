@@ -22,6 +22,7 @@ enum Interpolation {
 void reproject(const Image *in, Image *out, int num_samples,
                Interpolation interpolation);
 
+void auto_exposure(const Image *img, float reinhard);
 void post_process(const Image *img, float exposure, float reinhard);
 
 } // namespace reproject

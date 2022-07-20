@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iostream>
 
 #include <Tracy.hpp>
 
@@ -263,6 +264,50 @@ void reproject(const Image *in, Image *out, int num_samples, Interpolation im) {
   } else if (im == BICUBIC) {
     reproject_bicubic(in, out, num_samples);
   }
+}
+
+void auto_exposure(const Image *img, float reinhard) {
+  ZoneScoped;
+  int ch = std::min(img->channels, 3);
+  // determine per-channel average 
+  float *sums = new float[ch];
+  for (int c = 0; c < ch; ++c) sums[c] = 0;
+  int i = 0;
+  for (int y = 0; y < img->height; ++y) {
+    for (int x = 0; x < img->width; ++x) {
+      for (int c = 0; c < ch; ++c) {
+        if ( !std::isnan(img->data[i]) ) {
+            sums[c] += img->data[i];
+        }
+        i++;
+      }
+      i += img->channels - ch;
+    }
+  }
+  double *means = new double[ch];
+  for (int c = 0; c < ch; ++c) means[c] = sums[c]/(img->width*img->height);
+
+  // simple exposure compensation and white balance:
+  // adjust so that per-channel mean is 0.5
+  double *scales = new double[ch];
+  for (int c = 0; c < ch; ++c) scales[c] = 0.5/means[c];
+
+  i = 0;
+  for (int y = 0; y < img->height; ++y) {
+    for (int x = 0; x < img->width; ++x) {
+      for (int c = 0; c < ch; ++c) {
+        float v = img->data[i];
+        v *= scales[c];
+        v = v * (1.0f + v / (reinhard * reinhard)) / (1.0f + v);
+        img->data[i] = v;
+        i++;
+      }
+      i += img->channels - ch;
+    }
+  }
+  delete [] sums;
+  delete [] means;
+  delete [] scales;
 }
 
 void post_process(const Image *img, float exposure, float reinhard) {

@@ -72,6 +72,8 @@ int main(int argc, char **argv) {
     ;
 
   options.add_options("Color processing")
+    ("auto-exposure", "Automatic exposure compensation and white balance.",
+     cxxopts::value<bool>(), "auto_exposure")
     ("exposure", "Exposure compensation in stops (EV) to brigthen "
                  "or darken the pictures.",
      cxxopts::value<double>()->default_value("0.0"), "EV")
@@ -99,6 +101,7 @@ int main(int argc, char **argv) {
   std::string input_cfg_file;
   std::string output_cfg_file;
   double scale;
+  bool auto_exposure = false;
   double exposure = 1.0;
   double reinhard = 1.0;
   bool dry_run = false;
@@ -130,6 +133,7 @@ int main(int argc, char **argv) {
     num_samples = result["samples"].as<int>();
     num_threads = result["parallel"].as<int>();
     scale = result["scale"].as<double>();
+    auto_exposure = result["auto-exposure"].as<bool>();
     exposure = std::pow(2.0, result["exposure"].as<double>());
     reinhard = result["reinhard"].as<double>();
     if (result.count("no-reproject")) {
@@ -300,7 +304,7 @@ int main(int argc, char **argv) {
 
   std::function<void(std::string)> submit_file = [&](fs::path p) {
     pool.push([p, num_samples, interpolation, output_dir, scale, input_lens,
-               output_lens, &done_count, &count, reproject, exposure, reinhard,
+               output_lens, &done_count, &count, reproject, auto_exposure, exposure, reinhard,
                store_exr, store_png, skip_if_exists](int) {
       ZoneScopedN("process_file");
       try {
@@ -347,7 +351,9 @@ int main(int argc, char **argv) {
           reproject::reproject(&input, &output, num_samples, interpolation);
         }
 
-        if (exposure != 1.0 || reinhard != 1.0) {
+        if (auto_exposure) {
+          reproject::auto_exposure(&output, reinhard);
+        } else if (exposure != 1.0 || reinhard != 1.0) {
           reproject::post_process(&output, exposure, reinhard);
         }
 
