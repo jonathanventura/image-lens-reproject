@@ -269,6 +269,38 @@ void reproject(const Image *in, Image *out, int num_samples, Interpolation im) {
 void auto_exposure(const Image *img, float reinhard) {
   ZoneScoped;
   int ch = std::min(img->channels, 3);
+  
+  // determine per-channel median
+  float *medians = new float[ch];
+  int i = 0;
+  float *values = new float[img->height*img->width];
+  for ( int k = 0; k < ch; ++k) {
+    int n = 0;
+    i = 0;
+    for (int y = 0; y < img->height; ++y) {
+      for (int x = 0; x < img->width; ++x) {
+        for (int c = 0; c < ch; ++c) {
+          if ( c == k ) {
+            if ( !std::isnan(img->data[i]) ) {
+              values[n++] = img->data[i];
+            }
+          }
+          i++;
+        }
+        i += img->channels - ch;
+      }
+    }
+    if ( n % 2 == 0 ) {
+        std::nth_element(values, values + n / 2, values + n);
+        std::nth_element(values, values + (n - 1) / 2, values + n);
+        medians[k] = (values[(n-1)/2] + values[n/2])/2;
+    } else {
+        std::nth_element(values, values + n / 2, values + n );
+        medians[k] = values[n/2];
+    }
+  }
+    
+  /*
   // determine per-channel average 
   float *sums = new float[ch];
   for (int c = 0; c < ch; ++c) sums[c] = 0;
@@ -286,11 +318,13 @@ void auto_exposure(const Image *img, float reinhard) {
   }
   double *means = new double[ch];
   for (int c = 0; c < ch; ++c) means[c] = sums[c]/(img->width*img->height);
+  */
 
   // simple exposure compensation and white balance:
   // adjust so that per-channel mean is 0.5
   double *scales = new double[ch];
-  for (int c = 0; c < ch; ++c) scales[c] = 0.5/means[c];
+  //for (int c = 0; c < ch; ++c) scales[c] = 0.5/means[c];
+  for (int c = 0; c < ch; ++c) scales[c] = 0.5/medians[c];
 
   i = 0;
   for (int y = 0; y < img->height; ++y) {
@@ -305,8 +339,10 @@ void auto_exposure(const Image *img, float reinhard) {
       i += img->channels - ch;
     }
   }
-  delete [] sums;
-  delete [] means;
+  //delete [] sums;
+  //delete [] means;
+  delete [] medians;
+  delete [] values;
   delete [] scales;
 }
 
